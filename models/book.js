@@ -6,13 +6,16 @@ const bookSchema = new mongoose.Schema({
   ISBN: { 
     type: String, 
     required: true, 
+    //create unique index
     index: true,
     unique: true, 
   },
   authorId: { 
     type: String,
     required: true, 
-    index: true },
+    //create index
+    index: true 
+  },
   blurb: { type: String },
   publicationYear: { type: Number, required: true },
   pageCount: { type: Number, required: true }

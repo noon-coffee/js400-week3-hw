@@ -7,13 +7,11 @@ module.exports = {};
 module.exports.getAll = (page, perPage, authorId) => {
   //return Book.find().limit(perPage).skip(perPage*page).lean();
 
-  let authorFilter = authorId 
-    ? { authorId : mongoose.Types.ObjectId(authorId) }
-    : { authorId : {$exists: true} }
-
+  //Include filter for authorId if specified and modified to use aggregate query
+  let findFilter = authorId ? { authorId : authorId } : {}
   return Book
     .aggregate([
-      { $match : authorFilter },
+      { $match : findFilter },
       { $skip: perPage*page },
       { $limit: perPage },
     ]);
@@ -32,7 +30,7 @@ module.exports.search = (term) => {
 
 module.exports.getAuthorStats = (includeAuthorInfo) => {
   const aggregationQuery = includeAuthorInfo
-    ? [
+    ? [ //includeAuthorInfo = true
       { $match: {} },
       { $sort: {_id: -1 }}, 
       { $group: {
@@ -42,19 +40,20 @@ module.exports.getAuthorStats = (includeAuthorInfo) => {
       }},
       { $project: {
         _id: 0, 
-        authorId: "$_id",
+        authorId: { $toObjectId: "$_id" },
         averagePageCount: 1, 
         numBooks: { $size: "$titles" },  
-        titles: 1 }
-      },
-      // { $lookup: {
-      //   from: "authors",
-      //   localField: "authorId",
-      //   foreignField: "_id",
-      //   as: "author"
-      // }},
+        titles: 1
+      }},
+      { $lookup: {
+        from: "authors",
+        localField: "authorId",
+        foreignField: "_id",
+        as: "author"
+      }},
+      { $unwind: '$author' }
     ]
-    : [
+    : [ //includeAuthorInfo = false
       { $match: {} },
       { $sort: {_id: -1 }}, 
       { $group: {
@@ -69,7 +68,6 @@ module.exports.getAuthorStats = (includeAuthorInfo) => {
         numBooks: { $size: "$titles" },  
         titles: 1 }
       },
-      //{$sort: {authorId: 1}},
     ];
 
   return Book.aggregate(aggregationQuery);
@@ -103,7 +101,8 @@ module.exports.create = async (bookData) => {
     const created = await Book.create(bookData);
     return created;
   } catch (e) {
-    if (e.message.includes('validation failed') || e.message.includes('E11000')) {
+    if (e.message.includes('validation failed') || 
+      e.message.includes('E11000')) { //Check for unique index error based on error code(?)
       throw new BadDataError(e.message);
     }
     throw e;
